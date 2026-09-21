@@ -37,6 +37,11 @@ jobs:
       - name: Native window smoke test
         if: runner.os != 'Linux'
         run: npm run smoke
+      - name: Configure Linux Electron sandbox
+        if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Linux window smoke test
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run smoke
@@ -46,6 +51,16 @@ jobs:
       - name: Launch packaged Windows application
         if: runner.os == 'Windows'
         run: node scripts/check-packaged.mjs "dist/win-unpacked/BRAIN CAT.exe"
+      - name: Install and launch Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem dist/*.exe | Select-Object -First 1
+          $installDir = Join-Path $env:RUNNER_TEMP 'Cat Brain Проверка'
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer failed: $($install.ExitCode)" }
+          node scripts/check-packaged.mjs "$installDir/BRAIN CAT.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed application failed' }
       - name: Launch packaged Mac Apple Silicon application
         if: matrix.platform == 'mac-arm64'
         run: node scripts/check-packaged.mjs "dist/mac-arm64/BRAIN CAT.app/Contents/MacOS/BRAIN CAT"
