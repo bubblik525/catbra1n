@@ -106,12 +106,49 @@ const atlasDesk=initAtlas(action,model);
 function addToAtlas(d){atlasDesk.add(d);}
 const labDesk=initLab();
 const radarDesk=initRadar();
+let radarAge='all', radarInterest=false;
+const ageTools=document.createElement('div');ageTools.className='radar-age-tools';
+const ageSelect=document.createElement('select');ageSelect.setAttribute('aria-label','Token launch age');
+for(const [value,label] of [['all','All launch ages'],['10','0–10 minutes'],['20','10–20 minutes'],['30','20–30 minutes'],['unknown','Unknown launch age']]){const o=document.createElement('option');o.value=value;o.textContent=label;ageSelect.append(o);}
+ageSelect.onchange=()=>{radarAge=ageSelect.value;renderRadar();};
+const interestButton=document.createElement('button');interestButton.textContent='Interesting only';interestButton.setAttribute('aria-pressed','false');interestButton.onclick=()=>{radarInterest=!radarInterest;interestButton.setAttribute('aria-pressed',String(radarInterest));renderRadar();};
+const ageNote=document.createElement('span');ageNote.textContent='Launch block age · newest 120 / queued refresh · one factory / chain 4663 · transfers ≠ buys';
+ageTools.append(ageSelect,interestButton,ageNote);$('#radar-rows').closest('table').before(ageTools);
+for(const title of ['LAUNCH AGE','ON-CHAIN / 5M']){const th=document.createElement('th');th.textContent=title;$('#radar-rows').closest('table').querySelector('thead tr').append(th);}
+const chainCard=document.createElement('section');chainCard.id='radar-chain';
+const chainButton=document.createElement('button');chainButton.textContent='Load on-chain details ↻';chainButton.id='radar-chain-load';
+chainButton.onclick=()=>{if(radarSelected)radarAction({type:'token-details',address:radarSelected});};
+$('#radar-analyze').before(chainButton,chainCard);
+function chainAmount(value,decimals){if(value==null)return 'UNKNOWN';if(!Number.isInteger(decimals)||decimals<0||decimals>255)return value+' raw units';const v=value.padStart(decimals+1,'0');return decimals? v.slice(0,-decimals)+'.'+v.slice(-decimals).slice(0,6):v;}
+function paintOnchain(token,state){
+ chainButton.disabled=!token||state.demo||!state.connected;
+ chainCard.replaceChildren();
+ const line=(value)=>{const el=document.createElement('div');el.textContent=value;chainCard.append(el);};
+ line('ON-CHAIN / BLOCKSCOUT');
+ line('Contract: '+(token?.address||'—'));
+ if(token?.creator)line('Launch creator: '+token.creator);
+ const d=token?.onchain;
+ if(!d){line(state.demo?'SIMULATED RADAR / on-chain lookup requires live mode':'Select a token or load details. Market quotes are not required.');return;}
+ line(d.status.toUpperCase()+' / '+new Date(d.checkedAt).toLocaleTimeString('en-GB'));
+ if(!d.name||!d.symbol)line('Name / symbol: metadata pending at source');
+ line('Sources: '+Object.entries(d.sources).map(([k,v])=>k+' '+v).join(' · '));
+ line('Supply: '+chainAmount(d.totalSupply,d.decimals));line('Holders: '+(d.holderCount??'UNKNOWN'));
+ const signal=state.activity?.find(a=>a.address===token.address)?.chain;
+ if(signal){line(signal.label+' / '+signal.reason);line('5m sample: '+(signal.transfers5m??'UNKNOWN')+' transfers / '+(signal.participants5m??'UNKNOWN')+' distinct addresses');}
+ line('HOLDERS / FIRST PAGE SAMPLE'+(d.holdersTruncated?' · TRUNCATED':''));
+ if(!d.holders.length)line(d.sources.holders==='available'?'No holders returned.':'Holder data unavailable.');
+ for(const h of d.holders)line((h.address||'UNKNOWN')+' / '+chainAmount(h.value,d.decimals));
+ line('TRANSFERS / FIRST PAGE SAMPLE'+(d.transfersTruncated?' · TRUNCATED':''));
+ if(!d.transfers.length)line(d.sources.transfers==='available'?'No transfers returned.':'Transfer data unavailable.');
+ for(const t of d.transfers.slice(0,5))line((t.timestamp||'Unknown time')+' / '+(t.from||'?')+' → '+(t.to||'?')+' / '+chainAmount(t.value,d.decimals));
+ line('Source-backed observations. Transfers do not prove shared ownership.');
+}
 
 let radarState=null,radarSelected=null,radarPolling=false,radarRequest=false,radarKnown=new Set();
 async function pollRadar(){if(radarPolling||$('#radar-panel').hidden||!session)return;radarPolling=true;try{const r=await fetch('/api/state',{headers:{'x-sheriff-session':session}});if(!r.ok)throw Error('Local radar session unavailable');radarState=await r.json();renderRadar();}catch(e){text('#radar-error',e.message);}finally{radarPolling=false;}}
-function renderRadar(){const s=radarState;if(!s)return;radarDesk.update(s);text('#radar-status',(s.demo?'DEMO / SIMULATED · ':'')+s.status);text('#radar-scan',s.lastScan?'LAST SCAN '+new Date(s.lastScan).toLocaleTimeString('en-GB'):'NO SCAN YET');const tokens=s.tokens.slice(0,120),freshIds=new Set(tokens.map(t=>t.address));if(!tokens.some(t=>t.address===radarSelected))radarSelected=tokens[0]?.address;$('#radar-empty').hidden=tokens.length>0;
- $('#radar-rows').replaceChildren(...tokens.map(t=>{const a=s.activity?.find(a=>a.address===t.address),tr=document.createElement('tr');tr.className=(t.address===radarSelected?'selected ':'')+(!radarKnown.has(t.address)?'new-row':'');const cell=document.createElement('td'),b=document.createElement('button'),sub=document.createElement('small');b.textContent=t.symbol||t.name||'Unresolved';sub.textContent=t.address.slice(0,8)+'…'+t.address.slice(-6);b.append(sub);b.onclick=()=>{radarSelected=t.address;renderRadar();};cell.append(b);tr.append(cell);const m=t.market,age=m?.observedAt?Math.max(0,Math.floor((Date.now()-m.observedAt)/1000)):null;for(const v of [usd(m?.price),usd(m?.liquidity),usd(m?.volume),Number.isFinite(m?.change)?m.change.toFixed(1)+'%':'—',age===null?'UNKNOWN':age+'s',a?.verdict||'WAIT']){const td=document.createElement('td');td.textContent=v;tr.append(td);}return tr;}));radarKnown=freshIds;
- const token=tokens.find(t=>t.address===radarSelected),a=s.activity?.find(a=>a.address===radarSelected);$('#radar-analyze').disabled=!token;text('#radar-name',token?.name||token?.symbol||'Watching for evidence.');text('#radar-verdict',a?.verdict||'WAIT');text('#radar-reason',a?.reason||'No verified market quote.');$('#radar-checks').replaceChildren(...(a?.checks||[]).map(check=>{const div=document.createElement('div');div.textContent=`${check.pass===true?'PASS':check.pass===false?'REVIEW':'UNKNOWN'} / ${check.name} · ${check.detail}`;return div;}));$('#radar-events').replaceChildren(...(s.engine?.events||[]).slice(0,10).map(e=>{const div=document.createElement('div');div.textContent=new Date(e.at).toLocaleTimeString('en-GB')+' / '+e.symbol+' / '+e.text;return div;}));
+function renderRadar(){const s=radarState;if(!s)return;radarDesk.update(s);text('#radar-status',(s.demo?'DEMO / SIMULATED · ':'')+s.status);text('#radar-scan',s.lastScan?'LAST SCAN '+new Date(s.lastScan).toLocaleTimeString('en-GB'):'NO SCAN YET');const tokens=s.tokens.slice(0,120).filter(t=>{const a=s.activity?.find(a=>a.address===t.address),age=a?.chain?.ageMinutes;const ageMatch=radarAge==='all'||(radarAge==='unknown'?age==null:age!=null&&age>=Number(radarAge)-10&&age<Number(radarAge));return ageMatch&&(!radarInterest||a?.chain?.active||a?.verdict==='WATCH');}).sort((a,b)=>{const rank=t=>{const a=s.activity?.find(a=>a.address===t.address);return Number(!!a?.chain?.active)*2+Number(a?.verdict==='WATCH');};return rank(b)-rank(a)||b.block-a.block;}),freshIds=new Set(tokens.map(t=>t.address));if(!tokens.some(t=>t.address===radarSelected))radarSelected=tokens[0]?.address;$('#radar-empty').hidden=tokens.length>0;text('#radar-empty',s.tokens.length?'No tokens match these filters. Unknown launch ages stay in their own group.':'No launches loaded. Connect Blockscout to begin scanning.');
+ $('#radar-rows').replaceChildren(...tokens.map(t=>{const a=s.activity?.find(a=>a.address===t.address),tr=document.createElement('tr');tr.className=(t.address===radarSelected?'selected ':'')+(!radarKnown.has(t.address)?'new-row':'');const cell=document.createElement('td'),b=document.createElement('button'),sub=document.createElement('small');b.textContent=t.symbol||t.name||'Unresolved';sub.textContent=t.address.slice(0,8)+'…'+t.address.slice(-6);b.append(sub);b.onclick=()=>{radarSelected=t.address;renderRadar();if(!s.demo&&s.connected)radarAction({type:"token-details",address:t.address});};cell.append(b);tr.append(cell);const m=t.market,age=m?.observedAt?Math.max(0,Math.floor((Date.now()-m.observedAt)/1000)):null;for(const v of [usd(m?.price),usd(m?.liquidity),usd(m?.volume),Number.isFinite(m?.change)?m.change.toFixed(1)+'%':'—',age===null?'UNKNOWN':age+'s',a?.verdict||'WAIT',a?.chain?.ageMinutes==null?'UNKNOWN':Math.floor(a.chain.ageMinutes)+'m',a?.chain?.transfers5m==null?'UNKNOWN':a.chain.transfers5m+' tx / '+a.chain.participants5m+' addresses'+(a.chain.active?' · ACTIVE':'')]){const td=document.createElement('td');td.textContent=v;tr.append(td);}return tr;}));radarKnown=freshIds;
+ const token=tokens.find(t=>t.address===radarSelected),a=s.activity?.find(a=>a.address===radarSelected);paintOnchain(token,s);$('#radar-analyze').disabled=!token;text('#radar-name',token?.name||token?.symbol||'Watching for evidence.');text('#radar-verdict',a?.verdict||'WAIT');text('#radar-reason',(!token?.market?'MARKET / Waiting for a quote. On-chain research remains available.':a?.reason||'No verified market quote.')+(s.marketError?' / Market source unavailable.':''));$('#radar-checks').replaceChildren(...(a?.checks||[]).map(check=>{const div=document.createElement('div');div.textContent=`${check.pass===true?'PASS':check.pass===false?'REVIEW':'UNKNOWN'} / ${check.name} · ${check.detail}`;return div;}));$('#radar-events').replaceChildren(...(s.engine?.events||[]).slice(0,10).map(e=>{const div=document.createElement('div');div.textContent=new Date(e.at).toLocaleTimeString('en-GB')+' / '+e.symbol+' / '+e.text;return div;}));
 }
 async function radarAction(body){if(radarRequest)return;radarRequest=true;text('#radar-error','Requesting provider…');try{await action(body);text('#radar-error','');await pollRadar();}catch(e){text('#radar-error',e.message);}finally{radarRequest=false;}}
 $('#radar-connect').onsubmit=e=>{e.preventDefault();const key=$('#scout-key').value;$('#scout-key').value='';radarAction({type:'connect',key});};$('#radar-refresh').onclick=()=>radarAction({type:'refresh'});$('#radar-analyze').onclick=()=>{if(!radarSelected)return;$('#contract').value=radarSelected;selectedMode='live';selectTab(0);$('#search').requestSubmit();};

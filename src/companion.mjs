@@ -1,3 +1,4 @@
+import {loadTokenDetails,applyTokenDetails,tokenActivity} from './token-details.mjs';
 import {relationService} from './relations.mjs';
 import { analyzeToken, updateEngine, demoStep } from './market-engine.mjs';
 import { guard, guardAction } from './session-guard.mjs';
@@ -36,7 +37,8 @@ export function companion(state, save, options = {}) {
     status = state.demo ? 'DEMO / SIMULATED DATA' : 'Add your personal API key',
     lastMarket = 0,
     lastWallet = 0,
-    marketOffset = 0;
+    marketOffset = 0,
+    lastDetails = 0;
   let access = null;
   const cloud = null; // Brain Cat is free; legacy progression sync is disabled.
   let cloudStatus = cloud ? 'Connecting cloud profile' : 'Local profile',
@@ -84,6 +86,7 @@ export function companion(state, save, options = {}) {
       status,
       busy,
       tokens: state.tokens,
+      marketError: state.marketError || null,
       watch: state.watch,
       games: state.games,
       trading: state.trading,
@@ -108,7 +111,7 @@ export function companion(state, save, options = {}) {
       engine: state.engine || { events: [], history: {} },
       activity: state.tokens
         .slice(0, 120)
-        .map((t) => analyzeToken(t, state.tokens))
+        .map((t) => ({...analyzeToken(t, state.tokens),chain:tokenActivity(t,Date.now(),state.demo)}))
         .sort((a, b) => (b.score ?? -1) - (a.score ?? -1)),
       cadence: { scan: 1000, quotes: 1000, confirmations: 12 },
       settings: { reducedMotion: !!state.reducedMotion },
@@ -135,7 +138,13 @@ export function companion(state, save, options = {}) {
         throw Error('Add your personal Blockscout API key in Settings');
       if (!state.lastScan || Date.now() - state.lastScan >= 1000)
         await provider.scan(state);
+      if (Date.now() - lastDetails >= 2000) {
+        const pending = state.tokens.slice(0,120).filter(t=>!t.onchain?.launchAt || Date.now()-t.onchain.launchAt<1800000).filter(t=>!t.onchain || Date.now()-t.onchain.checkedAt>=120000).sort((a,b)=>(a.onchain?.checkedAt||0)-(b.onchain?.checkedAt||0))[0];
+        if (pending) applyTokenDetails(pending, await loadTokenDetails(provider,pending.address,{block:pending.block,launchAt:pending.onchain?.launchAt}));
+        lastDetails=Date.now();
+      }
       if (Date.now() - lastMarket >= 1000) {
+        try {
         const ids = [
           ...new Set([
             ...state.trading.paper
@@ -162,6 +171,8 @@ export function companion(state, save, options = {}) {
           const q = (await provider.markets([p.address], p.pair))[0];
           if (q) p.lastQuote = q.market;
         }
+        state.marketError = null;
+        } catch (error) { state.marketError = error.message; }
         lastMarket = Date.now();
       }
       if (Date.now() - lastWallet >= 60000) {
@@ -215,6 +226,14 @@ export function companion(state, save, options = {}) {
       provider = next;
       status = 'Connected';
       await refresh();
+    } else if (type === 'token-details') {
+      if (!provider) throw Error('Connect Blockscout to load on-chain data');
+      const token = getToken(body.address);
+      if (!token.onchain || Date.now()-token.onchain.checkedAt > 60000) {
+        applyTokenDetails(token,await loadTokenDetails(provider,token.address,{block:token.block,launchAt:token.onchain?.launchAt}));
+        await save(state);
+      }
+      return token.onchain;
     } else if (type === 'relations') { return await relations(provider,body.address);
     } else if (type === 'refresh') await refresh();
     else if (type === 'settings') {
@@ -393,7 +412,7 @@ export function companion(state, save, options = {}) {
       }
     },
     async run(body) {
-      if(body.type==='relations'){const until=Date.now()+20000;while(busy&&Date.now()<until)await new Promise(r=>setTimeout(r,100));}
+      if(['relations','token-details'].includes(body.type)){const until=Date.now()+20000;while(busy&&Date.now()<until)await new Promise(r=>setTimeout(r,100));}
       if (busy) throw Error('Patrol is updating. Try again in a moment.');
       busy = true;
       try {
