@@ -1,0 +1,9 @@
+# Research desks refresh
+
+Scenario Lab: ten descriptive indicators, animated computation diagram, histogram of observed interval log returns, stress-loss slider, conditional paths for 1/6/24 hours. Drift=sum(log returns)/sum(elapsed hours); diffusion=sample time-normalized residual variance. Requires three positive-duration intervals. Bands assume constant drift and diffusion; not calibrated prediction intervals. Hourly volatility still requires hourly pairs. EMA is record-based; volume anchor uses candle closes, not transaction VWAP.
+
+Token Network: bundled 3d-force-graph / Three.js, 250 saved historical tokens, top-eight neighbors over 85% feature similarity, selectable nodes/edges, search, orbit/pan/zoom, auto rotation, filters, JSON export. Separate on-chain graph: batch up to 20 Robinhood public addresses using existing Blockscout session key. Address metadata, first-page transfers (max 50), token holders when available (max 30). Edges retain evidence. User-triggered expansion per node. Cap 600 nodes/2,000 edges, five-minute cache, minimum three-second relationship request interval. No common-owner inference or automatic recursive crawl. Graph is session-local.
+
+Pro Radar: terminal layout, snapshot counters, volume spectrum, timestamped telemetry, selectable quote table, activity checks, observed-change ledger. Display polls each second; quote age, connection mode and simulation status remain explicit. Graph batches serialize with refresh jobs.
+
+Validation: numerical/missing-data tests, relationship evidence/cache tests, browser checks for 250-node loading, selection, rotation, batch validation/missing-provider handling, stress/horizon changes. Radar tested in explicit simulation mode. Authenticated on-chain relationships require a Blockscout key and have not been verified against the user's account during this refresh.

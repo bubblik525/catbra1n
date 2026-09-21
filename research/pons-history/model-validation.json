@@ -1,0 +1,11 @@
+{
+  "train": 227,
+  "test": 98,
+  "excluded": 675,
+  "brier": 0.10920323965172835,
+  "baselineBrier": 0.11194132410479377,
+  "beatsBaseline": true,
+  "target": "Next available record closes lower; variable horizon",
+  "split": "70/30 chronological split by first record; one example per token",
+  "limitations": "One-day sample. Selective price coverage. Not calibrated. No fixed-horizon forecast. Synthetic dynamics on published area connectivity; not biological neurons."
+}

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>BRAIN CAT / Companion</title>
+    <link rel="icon" href="/catbrain-cat.png" type="image/png" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/catbrain.css" /><link rel="stylesheet" href="/braincat-theme.css" />
+  <link rel="stylesheet" href="/token-view.css">
+<link rel="stylesheet" href="/cortex-lab.css">
+</head>
+  <body>
+    <aside class="rail">
+      <a class="brand" href="#"
+        ><img src="/catbrain-cat.png" alt="" />BRAIN<span>CAT / OBSERVATORY</span></a
+      >
+      <div class="rail-label">YOUR FIELD STATION</div>
+      <nav id="navigation" aria-label="Main navigation"></nav>
+      <div class="rail-bottom">
+        <span class="signal"></span> ROBINHOOD CHAIN<br /><small
+          >Local. Read-only. Yours.</small
+        ><button data-tab="settings" class="settings-link">
+          ⚙ Settings <span>09</span>
+        </button>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div>
+          <span class="live-dot"></span
+          ><span id="connection">LOCAL COMPANION</span>
+        </div>
+        <div>
+          <span id="mode" class="tag">STARTING</span
+          ><button id="refresh" title="Refresh observations">↻ Refresh</button
+          ><time id="clock"></time>
+        </div>
+      </header>
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">OBSERVE / CONNECT / UNDERSTAND</div>
+          <h1 id="page-title">An instinct for the unexpected.</h1>
+          <p id="subtitle">
+            A curious companion. A clearer view of the market.
+          </p>
+        </div>
+<span class="free-label">OPEN ACCESS / NO WALLET</span>
+      </div>
+      <div class="layout">
+
+        <main id="content" tabindex="-1"></main>
+      </div>
+      <footer>
+        <span id="storage-note">LOCAL PROFILE</span
+        ><span>BRAIN CAT / OBSERVATORY PREVIEW</span
+        ><span>NO WALLET CONNECTION REQUIRED ↗</span>
+      </footer>
+    </div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <dialog id="modal">
+      <button class="close-modal" aria-label="Close dialog">×</button>
+      <div id="modal-content"></div>
+    </dialog>
+    <script src="/pets.js" type="module"></script>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

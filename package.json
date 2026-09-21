@@ -1,0 +1,82 @@
+{
+  "name": "sheriff-cat-terminal",
+  "version": "0.4.0",
+  "description": "Cat Brain - desktop token research with experimental cortical connectivity",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "bin": {
+    "sheriff-cat": "bin/sheriff.mjs"
+  },
+  "scripts": {
+    "start": "electron .",
+    "demo": "electron . --demo",
+    "terminal": "node bin/sheriff.mjs",
+    "test": "node --test test/*.test.mjs",
+    "web": "node bin/companion.mjs",
+    "web:demo": "node bin/companion.mjs --demo",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --publish never",
+    "postinstall": "node node_modules/electron/install.js",
+    "icon": "electron desktop/icon.cjs",
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "dist:mac": "electron-builder --mac --arm64 --x64 --publish never",
+    "smoke": "electron . --demo --smoke-test"
+  },
+  "files": [
+    "bin",
+    "src",
+    "companion",
+    "cloud",
+    "README.md"
+  ],
+  "private": true,
+  "main": "desktop/main.mjs",
+  "author": "BRAIN CAT",
+  "build": {
+    "appId": "run.sheriffcat.desktop",
+    "productName": "BRAIN CAT",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "desktop/**",
+      "src/**",
+      "companion/**",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.finance",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Finance"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "artifactName": "Cat-Brain-${version}-${os}-${arch}.${ext}",
+    "icon": "build/icon.png"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "3d-force-graph": "1.80.0"
+  }
+}

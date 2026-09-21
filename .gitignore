@@ -1,0 +1,25 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.sheriff-cat/
+state.json
+state.json.*
+demo.json
+demo.json.*
+*.lock
+*.tmp
+.DS_Store
+
+dist/
+# Local investigations and credentials never belong in source control.
+atlas.json
+atlas-demo.json
+profile/
+profile-recording/
+*.log
+*.pem
+*.key
+__pycache__/
+.wrangler/
+output/

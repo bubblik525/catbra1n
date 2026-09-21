@@ -1,0 +1,63 @@
+# Cat Brain
+
+Private source repository for the local Cat Brain research terminal.
+
+Four desks: Token View (experimental cortical readout), Scenario Lab (observed metrics and conditional paths), Token Network (3D patterns and source-backed address relationships), and Pro Radar (live observation).
+
+## Run locally
+
+Node.js 24 recommended.
+
+```sh
+npm ci
+npm start
+```
+
+For the browser UI without installing Electron:
+
+```sh
+node bin/companion.mjs
+```
+
+Open the private localhost URL printed by the launcher. For simulated radar data use `npm run demo` or `node bin/companion.mjs --demo`. The desktop File menu switches between demo and live mode.
+
+## Data connections
+
+- In **04 Pro Radar**, enter a Blockscout PRO API key and select **Connect Blockscout**. This provides factory observations and address relationships on Robinhood Chain 4663.
+- In **03 Token Network**, paste up to 50 public addresses and select **Trace addresses**. The current sample is capped at 50 transfers and 30 holders per request, with a 600-node / 2,000-link graph cap. A transfer is not proof of common ownership.
+- For fresh price history in desks 1–2, enter a separate **Bitquery** access token in **Data connection**. Blockscout credentials do not authenticate Bitquery.
+- Saved historical examples work without credentials. They are bundled public market observations, not current quotes or personal wallet exports.
+- Radar quotes use DexScreener. Newly observed launches may have no indexed market quotes; missing values remain unknown and cannot pass activity filters.
+
+Keys remain in local server memory and must be entered again after restart. Do not commit keys, personal address lists, profiles, investigation exports, or logs. Local data stays outside the source tree by default.
+
+## Validation and builds
+
+```sh
+npm test
+python3 test/pty_smoke.py
+npm run smoke
+npm run pack
+```
+
+`npm run smoke` opens and closes a native window. Building does not publish releases. CI checks run without account credentials; desktop installers are built only by manual workflow or version tags, with publishing disabled.
+
+See [QA report](docs/QA-2026-09-21.md) for tested scope and remaining limitations.
+
+## Model provenance
+
+The model uses a published graph of 65 cat cortical regions and 1,139 directed links, fixed engineered reservoir dynamics and a trained logistic readout. It is not a biological brain simulation or a validated trading predictor. Scores are uncalibrated. Conditional paths assume fixed drift and diffusion and are not calibrated prediction intervals.
+
+The bundled training sample has 227 training examples, 98 chronological holdout examples and 675 exclusions for insufficient history. One-day coverage does not establish trading performance.
+
+Graph source: https://neurodata.io/project/connectomes/
+
+To reproduce the bundled artifact using Python's standard library:
+
+```sh
+python3 research/pons-history/train_catbrain.py
+```
+
+This reads the public fixture and graph and rewrites `companion/cortex-data.mjs` and the validation report. The independently reproduced artifact was byte-identical during QA.
+
+Vendored 3D rendering: `companion/vendor/3d-force-graph.min.js`, with upstream license alongside it.
