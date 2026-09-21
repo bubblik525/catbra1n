@@ -40,7 +40,11 @@ npm run smoke
 npm run pack
 ```
 
-`npm run smoke` opens and closes a native window. Building does not publish releases. CI checks run without account credentials; desktop installers are built only by manual workflow or version tags, with publishing disabled.
+`npm run smoke` uses an isolated temporary profile, opens a native window, runs a saved model example and switches all four desks. Building does not publish releases. CI checks run without account credentials; desktop installers are built only by manual workflow or version tags, with publishing disabled.
+
+Desktop builds provide separate installers for Windows x64, Mac Apple Silicon (arm64), and Mac Intel (x64). Each packaged application is launched on its native CI runner. Windows CI also installs into a path containing spaces and Cyrillic characters and launches the installed executable. Node.js is bundled in the desktop application; end users do not need to install it.
+
+Private installer downloads are available under GitHub **Actions → Desktop builds → Artifacts** to users with repository access. Artifacts expire after seven days; rerun the workflow to rebuild them. These builds are unsigned and not notarized, so Windows SmartScreen or macOS Gatekeeper can display a trust prompt. Public distribution without such prompts requires platform signing credentials.
 
 See [QA report](docs/QA-2026-09-21.md) for tested scope and remaining limitations.
 
