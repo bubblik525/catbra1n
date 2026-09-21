@@ -1,3 +1,4 @@
+import {tokenImageUrl} from '../companion/token-media.mjs';
 import { validAddress } from './core.mjs';
 export const FACTORY = '0x7ed598bcef8bd9edd8c97a195c6d13f40801ec7e';
 export const TOPIC =
@@ -16,7 +17,13 @@ export class Provider {
     this.status = 'NOT CHECKED';
   }
   async json(url, body) {
-    const host = new URL(url).hostname;
+    const target = new URL(url);
+    const host = target.hostname;
+    const blockscout = target.origin === 'https://api.blockscout.com';
+    if (blockscout) {
+      if (this.blockedError) throw Error(this.blockedError);
+      target.searchParams.set('apikey', this.key);
+    }
     for (let n = 0; n < 3; n++) {
       const at = Math.max(Date.now(), this.next[host] || 0);
       this.next[host] = at + 400;
@@ -24,14 +31,11 @@ export class Provider {
       let response;
       try {
         this.calls++;
-        response = await this.fetcher(url, {
+        response = await this.fetcher(target.toString(), {
           method: body ? 'POST' : 'GET',
           headers: {
             Accept: 'application/json',
             ...(body ? { 'Content-Type': 'application/json' } : {}),
-            ...(host === 'api.blockscout.com'
-              ? { Authorization: `Bearer ${this.key}` }
-              : {}),
           },
           body: body ? JSON.stringify(body) : undefined,
           signal: AbortSignal.timeout(15000),
@@ -53,10 +57,21 @@ export class Provider {
         await sleep(Math.max(400, Number.isFinite(delay) ? delay : 1000));
         continue;
       }
-      if (!response.ok)
-        throw Error(
-          `${host}: HTTP ${response.status}${response.status === 401 || response.status === 403 ? ' (check API key)' : ''}`,
-        );
+      if (!response.ok) {
+        let outOfCredits = false;
+        if (response.status === 402 && blockscout) {
+          try { outOfCredits = (await response.json())?.error === 'Out of credits'; } catch {}
+        }
+        const hint = outOfCredits ? ' (Out of credits; restore Blockscout credits and reconnect)' : response.status === 402
+          ? ' (check API key, plan or credits; reconnect after resolving)'
+          : [401,403].includes(response.status) ? ' (check API key; reconnect)' : '';
+        const message = `${host}: HTTP ${response.status}${hint}`;
+        if (blockscout && [401,402,403].includes(response.status)) {
+          this.blockedError = message;
+          this.status = 'API BLOCKED';
+        }
+        throw Error(message);
+      }
       try {
         return await response.json();
       } catch {
@@ -90,6 +105,7 @@ export class Provider {
         state.cursor === null ? Math.max(0, toHead - 1999) : state.cursor + 1,
       to = Math.min(from + 1999, toHead);
     if (from > to) {
+      state.scanProgress = {head, confirmedHead:toHead, scannedThrough: Math.min(state.cursor ?? 0,toHead), remainingBlocks: Math.max(0,toHead-(state.cursor ?? 0))};
       state.lastScan = Date.now();
       return [];
     }
@@ -155,7 +171,8 @@ export class Provider {
     state.tokens = [...keep.values()].sort((a, b) => b.block - a.block);
     state.start ??= from;
     state.cursor = to;
-    state.lastScan = Date.now();
+    state.scanProgress = {head, confirmedHead:toHead, scannedThrough: Math.min(state.cursor ?? 0,toHead), remainingBlocks: Math.max(0,toHead-(state.cursor ?? 0))};
+      state.lastScan = Date.now();
     return tokens;
   }
   async markets(addresses, pair = null) {
@@ -181,6 +198,7 @@ export class Provider {
               address,
               name: p.baseToken.name,
               symbol: p.baseToken.symbol,
+              ...(tokenImageUrl(p.info?.imageUrl) ? {imageUrl:tokenImageUrl(p.info.imageUrl)} : {}),
               market: {
                 price: numeric(p.priceUsd),
                 change: numeric(p.priceChange?.h24),

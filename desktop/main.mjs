@@ -139,6 +139,10 @@ else {
         ]),
       );
       window.once('ready-to-show', () => window.show());
+      if (smoke) window.webContents.session.webRequest.onBeforeRequest(
+        {urls:['https://catbrain-smoke.invalid/*']},
+        (request,callback)=>callback({redirectURL:server.origin+(request.url.endsWith('/valid.png')?'/project-avatar.png':'/missing-image.png')}),
+      );
       await window.loadURL(recording ? server.url.replace('/#','/?record=network#') : server.url);
       if(recording)window.maximize();
       if (process.argv.includes('--smoke-test')) {

@@ -153,7 +153,7 @@ test('factory scan resumes, ignores removed logs, and failures do not advance cu
   await assert.rejects(() => provider.scan(state));
   assert.equal(state.cursor, 4084);
   assert.ok(
-    calls.every((c) => c.headers.Authorization === 'Bearer synthetic-key'),
+    calls.every((c) => new URL(c.url).searchParams.get('apikey') === 'synthetic-key' && !c.headers.Authorization),
   );
 });
 test('API keys are never sent to the market provider; chain mismatches fail', async () => {
@@ -187,4 +187,48 @@ test('missing pool, invalid JSON and rate-limit cooldown are explicit failures',
 });
 test('authentication failure never prints credential in the error',async()=>{
  const key='synthetic-secret-for-test',p=new Provider(key,async()=>new Response('secret body '+key,{status:401}));await assert.rejects(()=>p.connect(),e=>e.message.includes('401')&&!e.message.includes(key));
+});
+
+test('Blockscout 402 stops repeated calls but leaves market provider available', async()=>{
+ let calls=0;
+ const p=new Provider('synthetic-only',async url=>{
+   calls++;
+   if(new URL(url).hostname==='api.blockscout.com') {
+     assert.equal(new URL(url).searchParams.get('apikey'),'synthetic-only');
+     return new Response('',{status:402});
+   }
+   assert.equal(new URL(url).searchParams.has('apikey'),false);
+   return Response.json([]);
+ });
+ await assert.rejects(()=>p.connect(),/402/);
+ await assert.rejects(()=>p.connect(),/402/);
+ assert.equal(calls,1);
+ assert.equal(p.status,'API BLOCKED');
+ await p.markets(['0x'+'1'.repeat(40)]);
+ assert.equal(calls,2);
+});
+
+test('Credit exhaustion reports the provider reason without exposing response contents',async()=>{
+ const key='test-secret';
+ const p=new Provider(key,async()=>Response.json({error:'Out of credits',private:key},{status:402}));
+ await assert.rejects(()=>p.connect(),e=>e.message.includes('Out of credits')&&!e.message.includes(key));
+});
+test('Confirmed new launches appear on subsequent scans without duplicate rows or lost metadata',async()=>{
+ let head=100,phase=0;
+ const a='0x'+'1'.repeat(40),b='0x'+'2'.repeat(40),creator='0x'+'3'.repeat(40);
+ const state=blank(false),p=new Provider('synthetic-only');
+ p.rpc=async(method,params)=>{
+  if(method==='eth_blockNumber')return '0x'+head.toString(16);
+  const range=params[0];
+  const block=phase?89:88;
+  assert.ok(Number(BigInt(range.fromBlock))<=block);
+  assert.ok(Number(BigInt(range.toBlock))>=block);
+  const event={address:FACTORY,topics:[TOPIC,'0x'+'0'.repeat(24)+(phase?b:a).slice(2),'0x'+'0'.repeat(64),'0x'+'0'.repeat(24)+creator.slice(2)],blockNumber:'0x'+block.toString(16),transactionHash:'0xabc'};
+  return [event,event,{...event,removed:true}];
+ };
+ await p.scan(state);assert.equal(state.tokens.length,1);
+ state.tokens[0].name='Retained';state.tokens[0].imageUrl='https://cdn.example.com/a.png';
+ phase=1;head=101;await p.scan(state);
+ assert.equal(state.tokens.length,2);assert.equal(state.tokens[0].address,b);assert.equal(state.tokens[1].name,'Retained');
+ assert.equal(state.scanProgress.remainingBlocks,0);assert.equal(state.scanProgress.scannedThrough,89);
 });

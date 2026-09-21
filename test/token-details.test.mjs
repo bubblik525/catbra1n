@@ -48,3 +48,70 @@ test('Radar retains Blockscout token details and saves when the independent quot
   assert.equal(state.tokens[0].name,'Real metadata');assert.equal(state.tokens[0].market,null);assert.equal(state.tokens[0].onchain.status,'complete');assert.equal(state.marketError,'market source offline');assert.ok(saved>0);assert.ok(state.activity[0].chain.ageMinutes>=10);
  } finally {Object.assign(Provider.prototype,originals);}
 });
+
+test('Scan failure does not stop quotes and failed scans back off',async()=>{
+ const originals=Object.fromEntries(['connect','scan','markets'].map(k=>[k,Provider.prototype[k]]));
+ let scans=0,quotes=0;
+ try {
+  Provider.prototype.connect=async()=>{};
+  Provider.prototype.scan=async()=>{scans++;throw Error('api.blockscout.com: HTTP 402');};
+  Provider.prototype.markets=async()=>{quotes++;return [{address,name:'Quoted',symbol:'Q',market:{price:1,observedAt:Date.now(),liquidity:1000}}];};
+  const state=blank(false);state.tokens=[{address,name:'Unresolved',symbol:'?',market:null}];
+  const app=companion(state,async()=>{});
+  await app.run({type:'connect',key:'synthetic-only'});
+  assert.equal(app.snapshot().tokens[0].market.price,1);
+  assert.equal(app.snapshot().connectionMode,'DEGRADED');
+  assert.match(app.snapshot().status,/402/);
+  await app.run({type:'refresh'});
+  assert.equal(scans,1);assert.equal(quotes,1);
+ } finally {Object.assign(Provider.prototype,originals);}
+});
+
+test('Initial API denial still starts independent quote updates with blocked status',async()=>{
+ const originals=Object.fromEntries(['connect','markets'].map(k=>[k,Provider.prototype[k]]));
+ try {
+  Provider.prototype.connect=async function(){this.blockedError='api.blockscout.com: HTTP 402';throw Error(this.blockedError);};
+  Provider.prototype.markets=async()=>[{address,market:{price:2,observedAt:Date.now()}}];
+  const state=blank(false);state.tokens=[{address,name:'Token',symbol:'T',market:null}];
+  const app=companion(state,async()=>{});
+  await app.run({type:'connect',key:'synthetic-only'});
+  assert.equal(app.snapshot().connectionMode,'API BLOCKED');
+  assert.equal(app.snapshot().connected,false);
+  assert.equal(app.snapshot().tokens[0].market.price,2);
+ } finally {Object.assign(Provider.prototype,originals);}
+});
+
+import {tokenImageUrl} from '../companion/token-media.mjs';
+test('Token images accept HTTPS metadata and reject executable or credential-bearing URLs',()=>{
+ assert.equal(tokenImageUrl('https://cdn.example.com/cat.png'),'https://cdn.example.com/cat.png');
+ for(const value of ['javascript:alert(1)','data:image/svg+xml,test','http://cdn.example.com/a','https://127.0.0.1/a','https://user:password@example.com/a','https://example.com/a?apikey=secret'])assert.equal(tokenImageUrl(value),null);
+});
+test('Blockscout image and identity load without quotes and survive a later metadata outage',async()=>{
+ const p={json:async url=>url.endsWith('/holders')||url.endsWith('/transfers')?{items:[]}:{name:'Fresh Cat',symbol:'FC',icon_url:'https://cdn.example.com/cat.png'}};
+ const t={address,market:null};applyTokenDetails(t,await loadTokenDetails(p,address));
+ assert.equal(t.imageUrl,'https://cdn.example.com/cat.png');assert.equal(t.name,'Fresh Cat');assert.equal(t.market,null);
+ applyTokenDetails(t,await loadTokenDetails({json:async()=>{throw Error('offline');}},address));
+ assert.equal(t.imageUrl,'https://cdn.example.com/cat.png');assert.equal(t.onchain.status,'unavailable');
+});
+test('Radar refreshes token metadata even when launch age exceeds thirty minutes',async()=>{
+ const originals=Object.fromEntries(['connect','scan','markets','json'].map(k=>[k,Provider.prototype[k]]));
+ try {
+  Provider.prototype.connect=async()=>{};
+  Provider.prototype.scan=async s=>{s.lastScan=Date.now();};
+  Provider.prototype.markets=async()=>[];
+  Provider.prototype.json=async url=>url.endsWith('/holders')||url.endsWith('/transfers')?{items:[]}:{name:'Recovered',symbol:'RC'};
+  const s=blank(false);s.tokens=[{address,name:'Unresolved',symbol:'?',market:null,onchain:{launchAt:Date.now()-3600000,checkedAt:1}}];
+  const app=companion(s,async()=>{});await app.run({type:'connect',key:'synthetic-only'});
+  assert.equal(app.snapshot().tokens[0].name,'Recovered');
+ }finally{Object.assign(Provider.prototype,originals);}
+});
+
+import {researchRead} from '../src/token-details.mjs';
+test('Research prioritizes verified active transfers without requiring a quote, and rejects stale activity',()=>{
+ const now=Date.now();
+ const t={address,market:null,onchain:{checkedAt:now,name:'Cat',holderCount:'10',sources:{metadata:'available',transfers:'available'},transfers:Array.from({length:5},(_,i)=>({hash:'0x'+i,logIndex:i,timestamp:new Date(now-1000).toISOString(),from:address,to:'0x'+String(i+2).repeat(40)}))}};
+ assert.equal(researchRead(t,now).verdict,'LOOK CLOSER');
+ t.onchain.checkedAt=now-200000;
+ assert.equal(researchRead(t,now).verdict,'STALE DATA');
+ assert.equal(researchRead({address},now).hasData,false);
+});

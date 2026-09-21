@@ -16,3 +16,12 @@ body.recording-network .hero,body.recording-network .search-box,body.recording-n
 #radar-chain {margin:16px 0;padding:12px;border:1px solid #51344a;max-height:420px;overflow:auto;font:11px/1.7 monospace;overflow-wrap:anywhere;color:#c5afc1} #radar-chain>div {padding:6px 0;border-bottom:1px solid #241c28} #radar-chain>div:first-child{color:#efb2d8} #radar-chain-load{margin:12px 0} 
 
 .radar-age-tools{display:flex;align-items:center;gap:10px;padding:12px 0;flex-wrap:wrap}.radar-age-tools select{background:#100d13;color:#ebc7e0;border:1px solid #65415b;padding:9px;font:12px monospace}.radar-age-tools span{font:10px monospace;color:#b49bad}.radar-age-tools button[aria-pressed=true]{background:#503146;color:#fff}
+
+.token-avatar{display:inline-grid;place-items:center;flex:0 0 32px;width:32px;height:32px;overflow:hidden;border:1px solid #85536e;border-radius:8px;background:radial-gradient(circle at 25% 15%,#543044,#160f18);color:#efb3d5;font:12px monospace}
+.token-avatar img{display:block;width:100%;height:100%;object-fit:cover}
+.token-avatar-large{width:64px;height:64px;font-size:23px;border-radius:14px;box-shadow:0 0 24px #a64a7425}
+#radar-portrait{margin:12px 0}
+#radar-panel .radar-token-button{display:flex;align-items:center;gap:10px;min-width:210px}
+.radar-token-button>span:last-child{white-space:normal;overflow-wrap:anywhere;max-width:210px}
+.radar-active .radar-table .radar-token-button small{display:block;margin:5px 0 0}
+#radar-chain{overflow-wrap:anywhere}

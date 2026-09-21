@@ -1,4 +1,4 @@
-import {loadTokenDetails,applyTokenDetails,tokenActivity} from './token-details.mjs';
+import {loadTokenDetails,applyTokenDetails,tokenActivity,researchRead} from './token-details.mjs';
 import {relationService} from './relations.mjs';
 import { analyzeToken, updateEngine, demoStep } from './market-engine.mjs';
 import { guard, guardAction } from './session-guard.mjs';
@@ -36,6 +36,8 @@ export function companion(state, save, options = {}) {
     busy = false,
     status = state.demo ? 'DEMO / SIMULATED DATA' : 'Add your personal API key',
     lastMarket = 0,
+    lastScanAttempt = 0,
+    scanError = null,
     lastWallet = 0,
     marketOffset = 0,
     lastDetails = 0;
@@ -82,7 +84,10 @@ export function companion(state, save, options = {}) {
   function snapshot() {
     return {
       demo: state.demo,
-      connected: !!provider,
+      connected: !!provider && !provider.blockedError,
+      connectionMode: !provider ? 'OFFLINE' : provider.blockedError ? 'API BLOCKED' : scanError || state.marketError ? 'DEGRADED' : 'CONNECTED',
+      scanError: provider?.blockedError || scanError,
+      lastQuoteAttempt: lastMarket || null,
       status,
       busy,
       tokens: state.tokens,
@@ -103,6 +108,7 @@ export function companion(state, save, options = {}) {
       tiers: TIERS,
       address: state.observedAddress || '',
       lastScan: state.lastScan,
+      scanProgress: state.scanProgress || null,
       summary: summary(state.tokens),
       clones: clones(state.tokens.slice(0, 300)),
       daily: daily(state),
@@ -111,9 +117,9 @@ export function companion(state, save, options = {}) {
       engine: state.engine || { events: [], history: {} },
       activity: state.tokens
         .slice(0, 120)
-        .map((t) => ({...analyzeToken(t, state.tokens),chain:tokenActivity(t,Date.now(),state.demo)}))
+        .map((t) => ({...analyzeToken(t, state.tokens),chain:tokenActivity(t,Date.now(),state.demo),research:researchRead(t,Date.now(),state.demo)}))
         .sort((a, b) => (b.score ?? -1) - (a.score ?? -1)),
-      cadence: { scan: 1000, quotes: 1000, confirmations: 12 },
+      cadence: { scan: 5000, quotes: 10000, confirmations: 12 },
       settings: { reducedMotion: !!state.reducedMotion },
       cloud: !!cloud,
       storage: cloudStatus,
@@ -136,14 +142,20 @@ export function companion(state, save, options = {}) {
     } else {
       if (!provider)
         throw Error('Add your personal Blockscout API key in Settings');
-      if (!state.lastScan || Date.now() - state.lastScan >= 1000)
-        await provider.scan(state);
-      if (Date.now() - lastDetails >= 2000) {
-        const pending = state.tokens.slice(0,120).filter(t=>!t.onchain?.launchAt || Date.now()-t.onchain.launchAt<1800000).filter(t=>!t.onchain || Date.now()-t.onchain.checkedAt>=120000).sort((a,b)=>(a.onchain?.checkedAt||0)-(b.onchain?.checkedAt||0))[0];
-        if (pending) applyTokenDetails(pending, await loadTokenDetails(provider,pending.address,{block:pending.block,launchAt:pending.onchain?.launchAt}));
+      if (!provider.blockedError && Date.now() - lastScanAttempt >= (scanError ? 30000 : 5000)) {
+        try { await provider.scan(state); scanError = null; }
+        catch (error) { scanError = error.message; }
+        lastScanAttempt = Date.now();
+      }
+      if (!scanError && !provider.blockedError && Date.now() - lastDetails >= 10000) {
+        const pending = state.tokens.slice(0,120).filter(t=>!t.onchain || Date.now()-t.onchain.checkedAt>=120000).sort((a,b)=>(a.onchain?.checkedAt||0)-(b.onchain?.checkedAt||0)).slice(0,3);
+        for (const token of pending) {
+          if (provider.blockedError) break;
+          applyTokenDetails(token, await loadTokenDetails(provider,token.address,{block:token.block,launchAt:token.onchain?.launchAt}));
+        }
         lastDetails=Date.now();
       }
-      if (Date.now() - lastMarket >= 1000) {
+      if (Date.now() - lastMarket >= 10000) {
         try {
         const ids = [
           ...new Set([
@@ -155,9 +167,9 @@ export function companion(state, save, options = {}) {
               .filter((r) => r.address !== '*')
               .map((r) => r.address),
             ...Object.keys(state.watch).slice(0, limits().watch),
-            ...state.tokens.slice(0, 20).map((t) => t.address),
+            ...state.tokens.slice(0, 120).map((t) => t.address),
           ]),
-        ].slice(0, 100);
+        ].slice(0, 220);
         const batch = ids.slice(marketOffset, marketOffset + 30);
         marketOffset = marketOffset + 30 >= ids.length ? 0 : marketOffset + 30;
         for (const q of await provider.markets(batch)) {
@@ -204,7 +216,7 @@ export function companion(state, save, options = {}) {
       const m = state.tokens.find((t) => t.address === g.address)?.market;
       return settle(g, m && { ...m, address: g.address });
     });
-    status = state.demo ? 'DEMO / SIMULATED DATA' : 'Observation active';
+    status = state.demo ? 'DEMO / SIMULATED DATA' : provider?.blockedError || scanError || (state.marketError ? 'Market source unavailable / on-chain observation active' : 'Observation active');
     await save(state);
   }
   async function action(body) {
@@ -222,8 +234,13 @@ export function companion(state, save, options = {}) {
       )
         throw Error('Enter your personal API key');
       const next = new Provider(body.key.trim());
-      await next.connect();
+      try { await next.connect(); }
+      catch (error) {
+        if (!next.blockedError) throw error;
+        // Keep the independent market feed available even when API access is denied.
+      }
       provider = next;
+      lastScanAttempt = 0; scanError = null; lastMarket = 0; lastDetails = 0;
       status = 'Connected';
       await refresh();
     } else if (type === 'token-details') {

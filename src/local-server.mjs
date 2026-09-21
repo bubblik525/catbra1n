@@ -32,6 +32,7 @@ export async function startCompanion({
     '/': ['research.html', 'text/html'],
     '/legacy': ['index.html', 'text/html'],
     '/research.js': ['research.js', 'text/javascript'],
+    '/token-media.mjs': ['token-media.mjs', 'text/javascript'],
     '/research.css': ['research.css', 'text/css'],
     '/project-avatar.png': ['project-avatar.png', 'image/png'],
     '/cortex-data.mjs': ['cortex-data.mjs', 'text/javascript'],
@@ -68,7 +69,7 @@ export async function startCompanion({
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     if (
       req.headers.host !== `127.0.0.1:${port}` ||
