@@ -1,10 +1,13 @@
+import {checkDesktop} from './smoke.mjs';
 import {switchedModeArgs} from './launch-options.mjs';
 import { app, BrowserWindow, Menu, dialog, shell } from 'electron';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { startCompanion } from '../src/local-server.mjs';
 app.setName('BRAIN CAT');
+const smoke = process.argv.includes('--smoke-test');
+if (smoke) app.setPath('userData', await mkdtemp(join(tmpdir(), 'catbrain-smoke-')));
 const recording = process.argv.includes('--record-network');
 const demo = recording || process.argv.includes('--demo');
 let window,
@@ -144,6 +147,8 @@ else {
           headers: { 'X-Sheriff-Session': new URL(server.url).hash.slice(1) },
         });
         if (!response.ok) throw Error('Desktop API smoke test failed');
+        const checks = await checkDesktop(window);
+        if (process.env.CATBRAIN_SMOKE_REPORT) await writeFile(process.env.CATBRAIN_SMOKE_REPORT, JSON.stringify({ok:true, platform:process.platform, arch:process.arch, packaged:app.isPackaged, ...checks}));
         const image = await window.webContents.capturePage();
         await writeFile(join(tmpdir(), 'sheriff-desktop-preview.png'), image.toPNG());
         console.log('DESKTOP_SMOKE_OK');
